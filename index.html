@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=390, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>Morning Brief</title>
+  <style>
+    :root {
+      --bg: #0a0a0a;
+      --surface: #111111;
+      --border: #1e1e1e;
+      --text: #e8e8e8;
+      --muted: #666;
+      --accent: #c8a97e;
+      --dot: #3d7a5e;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+
+    html, body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, 'SF Pro Text', 'Helvetica Neue', sans-serif;
+      min-height: 100vh;
+    }
+
+    body {
+      padding: env(safe-area-inset-top, 44px) 0 env(safe-area-inset-bottom, 24px);
+    }
+
+    .header {
+      padding: 52px 24px 20px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .date-label {
+      font-size: 11px;
+      font-weight: 500;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 6px;
+    }
+
+    .date-main {
+      font-size: 28px;
+      font-weight: 300;
+      letter-spacing: -0.02em;
+      line-height: 1.1;
+    }
+
+    .date-main span { color: var(--accent); font-weight: 400; }
+
+    .generated-at {
+      margin-top: 6px;
+      font-size: 11px;
+      color: var(--muted);
+    }
+
+    .greeting {
+      padding: 28px 24px 0;
+      font-size: 22px;
+      font-weight: 300;
+      letter-spacing: -0.01em;
+      line-height: 1.3;
+    }
+
+    section { margin: 28px 24px 0; }
+
+    .section-label {
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 12px;
+    }
+
+    .focus-list { list-style: none; }
+
+    .focus-list li {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      padding: 12px 0;
+      border-bottom: 1px solid var(--border);
+      font-size: 15px;
+      line-height: 1.45;
+    }
+
+    .focus-list li:last-child { border-bottom: none; }
+
+    .focus-list li::before {
+      content: '';
+      display: block;
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--dot);
+      margin-top: 6px;
+      flex-shrink: 0;
+    }
+
+    .reminder-text {
+      font-size: 15px;
+      line-height: 1.55;
+      color: #aaa;
+    }
+
+    .thought-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 18px 20px;
+    }
+
+    .thought-text {
+      font-size: 16px;
+      font-weight: 300;
+      line-height: 1.5;
+      color: var(--accent);
+      font-style: italic;
+    }
+
+    .footer {
+      margin: 40px 24px 0;
+      padding-top: 20px;
+      border-top: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .footer-text { font-size: 11px; color: var(--muted); }
+
+    .refresh-btn {
+      background: none;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--muted);
+      font-size: 11px;
+      padding: 6px 10px;
+      cursor: pointer;
+      font-family: inherit;
+    }
+
+    .refresh-btn:active { background: var(--surface); }
+
+    .error-state {
+      margin: 40px 24px;
+      padding: 20px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      font-size: 14px;
+      color: var(--muted);
+      text-align: center;
+    }
+
+    .loading {
+      margin: 80px 24px;
+      text-align: center;
+      color: var(--muted);
+      font-size: 13px;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="date-label">Morning Brief</div>
+    <div class="date-main" id="date-display">—</div>
+    <div class="generated-at" id="generated-at"></div>
+  </div>
+
+  <div id="content">
+    <div class="loading">Loading…</div>
+  </div>
+
+  <script>
+    function formatDate(dateStr) {
+      const d = new Date(dateStr + 'T12:00:00');
+      const days = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+      const months = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+      return `${days[d.getDay()]}, <span>${months[d.getMonth()]} ${d.getDate()}</span>`;
+    }
+
+    function formatTime(iso) {
+      const d = new Date(iso);
+      if (isNaN(d)) return '';
+      return `Updated ${d.toLocaleTimeString('en-US', {hour:'numeric', minute:'2-digit', hour12:true})}`;
+    }
+
+    function render(data) {
+      document.getElementById('date-display').innerHTML = formatDate(data.date);
+      document.getElementById('generated-at').textContent = formatTime(data.generated_at);
+
+      const items = Array.isArray(data.focus)
+        ? data.focus.map(f => `<li>${f}</li>`).join('')
+        : `<li>${data.focus}</li>`;
+
+      document.getElementById('content').innerHTML = `
+        <p class="greeting">${data.greeting}</p>
+
+        <section>
+          <div class="section-label">Today's Focus</div>
+          <ul class="focus-list">${items}</ul>
+        </section>
+
+        <section>
+          <div class="section-label">Remember</div>
+          <p class="reminder-text">${data.reminder}</p>
+        </section>
+
+        <section>
+          <div class="section-label">Thought</div>
+          <div class="thought-card">
+            <p class="thought-text">${data.thought}</p>
+          </div>
+        </section>
+
+        <div class="footer">
+          <span class="footer-text">senaidaxoxo</span>
+          <button class="refresh-btn" onclick="load()">Refresh</button>
+        </div>
+      `;
+    }
+
+    async function load() {
+      try {
+        const r = await fetch('briefing.json?t=' + Date.now());
+        if (!r.ok) throw new Error();
+        render(await r.json());
+      } catch {
+        document.getElementById('content').innerHTML =
+          '<div class="error-state">Could not load briefing.<br>Check back after 4AM ET.</div>';
+      }
+    }
+
+    load();
+  </script>
+</body>
+</html>

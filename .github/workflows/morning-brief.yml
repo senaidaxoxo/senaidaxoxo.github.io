@@ -1,0 +1,38 @@
+name: Morning Brief
+
+on:
+  schedule:
+    # 4AM Eastern (EDT = UTC-4 → 08:00 UTC; adjust to 09:00 in EST winter)
+    - cron: '0 8 * * *'
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install deps
+        run: pip install anthropic
+
+      - name: Generate briefing
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: python3 .github/scripts/generate_brief.py
+
+      - name: Commit and push
+        run: |
+          git config user.name "morning-brief[bot]"
+          git config user.email "morning-brief[bot]@users.noreply.github.com"
+          git add briefing.json
+          git diff --cached --quiet || git commit -m "chore: morning brief $(date -u +%Y-%m-%d)"
+          git push
