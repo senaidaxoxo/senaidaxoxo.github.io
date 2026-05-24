@@ -1,7 +1,10 @@
 import anthropic
+import base64
 import json
 import os
 import re
+import urllib.request
+import urllib.error
 from datetime import datetime, timezone
 
 def read_wiki(path):
@@ -10,6 +13,18 @@ def read_wiki(path):
             return f.read()
     except FileNotFoundError:
         return '(not found)'
+
+def github_api(method, path, body=None):
+    token = os.environ['GITHUB_TOKEN']
+    repo  = os.environ['GITHUB_REPOSITORY']
+    url   = f'https://api.github.com/repos/{repo}{path}'
+    data  = json.dumps(body).encode() if body else None
+    req   = urllib.request.Request(url, data=data, method=method)
+    req.add_header('Authorization', f'token {token}')
+    req.add_header('Content-Type', 'application/json')
+    req.add_header('Accept', 'application/vnd.github+json')
+    with urllib.request.urlopen(req) as r:
+        return json.loads(r.read())
 
 def generate():
     today    = datetime.now(timezone.utc).strftime('%A, %B %d, %Y')
@@ -74,13 +89,23 @@ Respond with ONLY valid JSON — no markdown fences, no explanation:
     text = msg.content[0].text.strip()
     text = re.sub(r'^```(?:json)?\s*', '', text)
     text = re.sub(r'\s*```$', '', text.strip())
-
     briefing = json.loads(text)
 
-    with open('briefing.json', 'w', encoding='utf-8') as f:
-        json.dump(briefing, f, indent=2, ensure_ascii=False)
+    # Push directly via GitHub API — no git commit/push race conditions
+    content_str = json.dumps(briefing, indent=2, ensure_ascii=False)
+    content_b64 = base64.b64encode(content_str.encode()).decode()
 
-    print(f"Generated briefing for {date_iso}")
+    # Get current file SHA (needed for update)
+    current = github_api('GET', '/contents/briefing.json')
+    sha = current['sha']
+
+    github_api('PUT', '/contents/briefing.json', {
+        'message': f'chore: morning brief {date_iso}',
+        'content': content_b64,
+        'sha': sha,
+    })
+
+    print(f"Briefing for {date_iso} pushed via GitHub API")
 
 if __name__ == '__main__':
     generate()
