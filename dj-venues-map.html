@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+<title>SENAIDA — Tour Map</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=Bai+Jamjuree:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+<style>
+  :root{
+    --bg:#060609;
+    --bg-2:#0b0b11;
+    --land:#15151b;
+    --land-line:#2a2a34;
+    --grat:#111119;
+    --purple:#a24bff;
+    --purple-soft:#7d3ad1;
+    --green:#35f0a0;
+    --ink:#f5f5f7;
+    --muted:#82828f;
+    --muted-2:#585866;
+    --panel:rgba(10,10,15,.86);
+    --panel-line:#23232d;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{
+    background:var(--bg);
+    color:var(--ink);
+    font-family:"Syne",system-ui,sans-serif;
+    overflow:hidden;
+    -webkit-font-smoothing:antialiased;
+  }
+  #app{position:relative;width:100vw;height:100vh;overflow:hidden}
+
+  /* ---- map ---- */
+  #map{position:absolute;inset:0;width:100%;height:100%;display:block;cursor:grab}
+  #map.grabbing{cursor:grabbing}
+  .graticule{fill:none;stroke:var(--grat);stroke-width:.5px}
+  .sphere{fill:var(--bg-2)}
+  .country{fill:var(--land);stroke:var(--land-line);stroke-width:.5px;vector-effect:non-scaling-stroke}
+  .dot{
+    fill:var(--purple);
+    stroke:rgba(162,75,255,.35);
+    stroke-width:6px;
+    cursor:pointer;
+    transition:fill .18s ease, stroke .18s ease;
+  }
+  .dot:hover,.dot.active{fill:var(--green);stroke:rgba(53,240,160,.30)}
+  .dot.dim{opacity:.28}
+  .pulse{fill:none;stroke:var(--green);stroke-width:1.4px;vector-effect:non-scaling-stroke;pointer-events:none}
+
+  /* ---- header ---- */
+  .head{
+    position:absolute;top:0;left:0;right:0;padding:20px 24px;
+    display:flex;justify-content:space-between;align-items:flex-start;
+    pointer-events:none;z-index:5;
+    background:linear-gradient(180deg,rgba(6,6,9,.82) 0%,rgba(6,6,9,0) 100%);
+  }
+  .brand{line-height:1}
+  .brand h1{
+    margin:0;font-size:21px;font-weight:800;letter-spacing:.24em;text-transform:uppercase;
+  }
+  .brand .sub{
+    font-family:"Bai Jamjuree",system-ui,sans-serif;font-size:10.5px;color:var(--muted);
+    letter-spacing:.24em;text-transform:uppercase;margin-top:7px;
+  }
+  .stats{display:flex;gap:22px;text-align:right}
+  .stat .n{font-size:22px;font-weight:700;color:var(--green);line-height:1;font-variant-numeric:tabular-nums}
+  .stat .l{font-family:"Bai Jamjuree",system-ui,sans-serif;font-size:9px;color:var(--muted);letter-spacing:.18em;text-transform:uppercase;margin-top:6px}
+
+  /* ---- venue popover (anchored to a dot) ---- */
+  .popover{
+    position:absolute;top:0;left:0;z-index:8;width:246px;max-width:74vw;
+    background:var(--panel);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);
+    border:1px solid var(--panel-line);border-radius:3px;
+    box-shadow:0 18px 50px rgba(0,0,0,.55);
+    overflow:hidden;
+    opacity:0;visibility:hidden;transform:translateY(4px);pointer-events:none;
+    transition:opacity .13s ease,transform .13s ease;
+  }
+  .popover.show{opacity:1;visibility:visible;transform:none;pointer-events:auto}
+  .pop-head{
+    display:flex;align-items:baseline;justify-content:space-between;gap:10px;
+    padding:12px 14px 10px;border-bottom:1px solid var(--panel-line);
+  }
+  .pop-city{font-size:15px;font-weight:800;letter-spacing:.01em;line-height:1.1}
+  .pop-tag{font-family:"Bai Jamjuree",system-ui,sans-serif;font-size:9px;color:var(--muted);letter-spacing:.16em;text-transform:uppercase;margin-top:4px}
+  .pop-count{font-family:"Bai Jamjuree",system-ui,sans-serif;font-size:10.5px;color:var(--green);white-space:nowrap}
+  .venues{list-style:none;margin:0;padding:7px 7px 9px;max-height:216px;overflow-y:auto}
+  .venues li{
+    font-family:"Bai Jamjuree",system-ui,sans-serif;font-size:12px;color:#d7d7dd;
+    padding:4px 8px;border-radius:2px;display:flex;gap:9px;align-items:baseline;
+  }
+  .venues li:hover{background:rgba(53,240,160,.10)}
+  .venues li .b{color:var(--green);flex:none;font-variant-numeric:tabular-nums;opacity:.85}
+  .venues::-webkit-scrollbar{width:8px}
+  .venues::-webkit-scrollbar-thumb{background:#26262f;border-radius:8px}
+  .venues::-webkit-scrollbar-track{background:transparent}
+
+  /* ---- footer controls ---- */
+  .controls{
+    position:absolute;right:24px;bottom:24px;z-index:6;display:flex;gap:8px;
+  }
+  .controls button{
+    width:34px;height:34px;border:1px solid var(--panel-line);background:var(--panel);
+    color:var(--ink);font-family:"Bai Jamjuree",system-ui,sans-serif;font-size:15px;border-radius:2px;
+    cursor:pointer;backdrop-filter:blur(9px);-webkit-backdrop-filter:blur(9px);transition:border-color .15s,color .15s;
+  }
+  .controls button:hover{border-color:var(--green);color:var(--green)}
+  .legend{
+    position:absolute;right:24px;top:78px;z-index:5;font-family:"Bai Jamjuree",system-ui,sans-serif;
+    font-size:10px;color:var(--muted);text-align:right;letter-spacing:.06em;line-height:1.9;pointer-events:none;
+  }
+  .legend .sw{display:inline-block;width:8px;height:8px;border-radius:50%;margin-left:8px;vertical-align:middle}
+
+  .loading{
+    position:absolute;inset:0;display:flex;align-items:center;justify-content:center;z-index:9;
+    font-family:"Bai Jamjuree",system-ui,sans-serif;font-size:12px;color:var(--muted);letter-spacing:.2em;text-transform:uppercase;
+  }
+  .err{color:#ff6b6b;text-transform:none;letter-spacing:0;padding:0 24px;text-align:center;max-width:460px;line-height:1.6}
+
+  @media (max-width:640px){
+    .head{padding:14px 16px}
+    .brand h1{font-size:15px;letter-spacing:.24em}
+    .stats{gap:14px}
+    .stat .n{font-size:17px}
+    .legend{display:none}
+    .popover{width:220px;max-width:78vw}
+    .venues{max-height:170px}
+    .controls{right:12px;bottom:12px}
+  }
+  @media (prefers-reduced-motion:reduce){
+    .pulse{display:none}
+    .dot{transition:none}
+  }
+</style>
+</head>
+<body>
+<div id="app">
+  <svg id="map" aria-label="World map of venues SENAIDA has performed at"></svg>
+
+  <div class="head">
+    <div class="brand">
+      <h1>SENAIDA</h1>
+      <div class="sub">Global Tour Log · Shows Played</div>
+    </div>
+    <div class="stats">
+      <div class="stat"><div class="n" id="s-cities">0</div><div class="l">Cities</div></div>
+      <div class="stat"><div class="n" id="s-venues">0</div><div class="l">Venues</div></div>
+      <div class="stat"><div class="n" id="s-countries">0</div><div class="l">Countries</div></div>
+    </div>
+  </div>
+
+  <div class="legend">
+    played city<span class="sw" style="background:var(--purple)"></span><br/>
+    selected<span class="sw" style="background:var(--green)"></span>
+  </div>
+
+  <div class="popover" id="popover" role="dialog" aria-label="Venue list">
+    <div class="pop-head">
+      <div>
+        <div class="pop-city" id="p-city"></div>
+        <div class="pop-tag" id="p-tag"></div>
+      </div>
+      <div class="pop-count" id="p-count"></div>
+    </div>
+    <ul class="venues" id="p-venues"></ul>
+  </div>
+
+  <div class="controls">
+    <button id="zin" title="Zoom in" aria-label="Zoom in">+</button>
+    <button id="zout" title="Zoom out" aria-label="Zoom out">−</button>
+    <button id="zreset" title="Reset" aria-label="Reset view">⟲</button>
+  </div>
+
+  <div class="loading" id="loading">Loading map…</div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
+<script src="https://cdn.jsdelivr.net/npm/topojson-client@3"></script>
+<script>
+/* ============================================================
+   VENUE DATA  — deduped, grouped by city. [lat, lon]
+   NYC merges NYC / Brooklyn / Manhattan into one dot.
+   Edit this array to add shows; the map + stats update themselves.
+   ============================================================ */
+const CITIES = [
+  { city:"New York City", country:"USA", coords:[40.7128,-74.0060], venues:[
+    "Eris","AWS Lounge","Bushwick Public House","Breakers","XPIZZA","PopCon","Chaos Computer",
+    "Producer's Club","Shorty Awards","The Sultan Room","71 Broadway","99 Scott","Glinda the Good Bus",
+    "The Living Gallery","Galo Space SoHo","Heaven Can Wait","JADE","Electric Sunshine",
+    "Moonvibez Music Festival","WATF! x XPIZZA Residency","Virgo","Mood Ring","New York Fashion Week",
+    "City Soul","IN/RESIDENCE","Aversion 1-Year Anniversary","1894 Studios","The Deck","Fiction Bar",
+    "Key Bar","Bossa Nova Civic Club","Newtown Radio","Wonderville","Hellphone","No Signal","The End",
+    "Silence Please","Reforesters Sound Lab","Mercury Lounge","The Woods","Creator's Loft","BYEBYE Techno",
+    "Starlite Collective","Clive Live","TECHNOPHILIA","PUBLIC Hotel","Dugout Radio","NYU Queer Prom",
+    "Techno Brooklyn","Chapel Bar","BIGA BITE","The Chocolate Factory","BIGA PRIDE","Nublu","The Loft",
+    "Sound Off Music for Bail","SILO","110 Studios","00:00","H0L0","Market Hotel","Loft Studios",
+    "WATF! x Common Wavs"
+  ]},
+  { city:"Toronto", country:"Canada", coords:[43.6532,-79.3832], venues:["Loveless Cafe","NXNE"]},
+  { city:"Los Angeles", country:"USA", coords:[34.0522,-118.2437], venues:["Closer"]},
+  { city:"Bogotá", country:"Colombia", coords:[4.7110,-74.0721], venues:["Eclipse Club"]},
+  { city:"Sutatausa", country:"Colombia", coords:[5.2489,-73.8530], venues:["Open Air"]},
+  { city:"Berlin", country:"Germany", coords:[52.5200,13.4050], venues:[
+    "kwia","CTM Festival","MONOM","OXI","Exude","Giri","Healix Haus","Ingwer","Atemporal Projects","Acud Macht Neu"
+  ]},
+  { city:"Leipzig", country:"Germany", coords:[51.3397,12.3731], venues:["Sphere Radio"]},
+  { city:"Potsdam", country:"Germany", coords:[52.3906,13.0645], venues:["Spartacus"]},
+  { city:"Aachen", country:"Germany", coords:[50.7753,6.0839], venues:["Apollo"]},
+  { city:"Paris", country:"France", coords:[48.8566,2.3522], venues:["24m2 Radio"]},
+  { city:"Brussels", country:"Belgium", coords:[50.8503,4.3517], venues:["Barrio Bar"]},
+  { city:"Barcelona", country:"Spain", coords:[41.3851,2.1734], venues:["RBL Radio"]},
+  { city:"The Hague", country:"Netherlands", coords:[52.0705,4.3007], venues:["Grey Space in the Middle","Future Intel","Royal Surf Club"]},
+  { city:"Rotterdam", country:"Netherlands", coords:[51.9244,4.4777], venues:["Operator Radio"]},
+  { city:"Groningen", country:"Netherlands", coords:[53.2194,6.5665], venues:["Secret Cinema's Halloween Afters","Relate Radio"]},
+  { city:"Milan", country:"Italy", coords:[45.4642,9.1900], venues:["Fritto Radio","Tempio del Futuro"]},
+  { city:"Prague", country:"Czechia", coords:[50.0755,14.4378], venues:["HEAT"]},
+  { city:"Athens", country:"Greece", coords:[37.9838,23.7275], venues:["Athens Techno Hub","IT Athens","Temple","2Ten","Cannibal Radio"]},
+  { city:"Dikaia", country:"Greece", coords:[41.3500,26.1500], venues:["CoFestival"]},
+  { city:"Istanbul", country:"Turkey", coords:[41.0082,28.9784], venues:["NOH Radio","Şahika","Space Trax @ Şahika"]},
+  { city:"Tokyo", country:"Japan", coords:[35.6762,139.6503], venues:["Room 303"]},
+  { city:"Hong Kong", country:"Hong Kong", coords:[22.3193,114.1694], venues:[
+    "MÖTH Radio","SLAP拍","The Hideout","&Space Radio","Abyss x Umami","Fringe Festival","Critical Mass"
+  ]},
+  { city:"Taipei", country:"Taiwan", coords:[25.0330,121.5654], venues:["Toha Radio","23 Music Room"]},
+  { city:"Shanghai", country:"China", coords:[31.2304,121.4737], venues:["byyb radio","Shanghai City Radio","Baihui Radio"]},
+  { city:"Beijing", country:"China", coords:[39.9042,116.4074], venues:["Groundless Factory"]},
+  { city:"Hangzhou", country:"China", coords:[30.2741,120.1551], venues:["411","Lust Radio"]},
+  { city:"Guangzhou", country:"China", coords:[23.1291,113.2644], venues:["Paak Community","GUM"]},
+  { city:"Chengdu", country:"China", coords:[30.5728,104.0668], venues:["Hakka Bar","CDCR"]},
+  { city:"Chongqing", country:"China", coords:[29.5630,106.5516], venues:["NUTS Livehouse"]},
+  { city:"Dali", country:"China", coords:[25.6065,100.2676], venues:["Pools"]},
+  { city:"Bangkok", country:"Thailand", coords:[13.7563,100.5018], venues:["Bangkok Community Radio","Exile"]},
+  { city:"Goa", country:"India", coords:[15.2993,74.1240], venues:["The Loft","Kid Local"]},
+  { city:"Mumbai", country:"India", coords:[19.0760,72.8777], venues:["Unlisted"]},
+  { city:"Dharamshala", country:"India", coords:[32.2190,76.3234], venues:["EDM Hostel"]},
+  { city:"Udaipur", country:"India", coords:[24.5854,73.6820], venues:["Udai Kothi"]},
+  { city:"Bhubaneswar", country:"India", coords:[20.2961,85.8245], venues:["Emirates"]}
+];
+
+/* ---- stats ---- */
+const totalVenues = CITIES.reduce((s,c)=>s+c.venues.length,0);
+const totalCountries = new Set(CITIES.map(c=>c.country)).size;
+document.getElementById("s-cities").textContent   = CITIES.length;
+document.getElementById("s-venues").textContent   = totalVenues;
+document.getElementById("s-countries").textContent= totalCountries;
+
+/* ---- svg / projection ---- */
+const svg = d3.select("#map");
+const gRoot = svg.append("g");
+const gMap  = gRoot.append("g");
+const gDots = gRoot.append("g");
+
+const projection = d3.geoNaturalEarth1();
+const path = d3.geoPath(projection);
+const graticule = d3.geoGraticule10();
+
+let W=0,H=0;
+function size(){
+  const el=document.getElementById("app");
+  W=el.clientWidth; H=el.clientHeight;
+  svg.attr("viewBox",`0 0 ${W} ${H}`);
+  projection.fitExtent([[10,70],[W-10,H-30]], {type:"Sphere"});
+  redraw();
+}
+function redraw(){
+  gMap.selectAll("path.sphere").attr("d",path);
+  gMap.selectAll("path.graticule").attr("d",path);
+  gMap.selectAll("path.country").attr("d",path);
+  positionDots();
+}
+
+/* ---- zoom ---- */
+const zoom = d3.zoom().scaleExtent([1,9])
+  .on("start",()=>svg.classed("grabbing",true))
+  .on("end",()=>svg.classed("grabbing",false))
+  .on("zoom",(ev)=>{
+    gRoot.attr("transform",ev.transform);
+    gDots.selectAll(".dot").attr("stroke-width",6/ev.transform.k);
+    gDots.selectAll(".pulse").attr("stroke-width",1.4/ev.transform.k);
+    if(activeNode) placePopover(activeNode);
+  });
+svg.call(zoom).on("dblclick.zoom",null);
+
+document.getElementById("zin").onclick   = ()=>svg.transition().duration(300).call(zoom.scaleBy,1.6);
+document.getElementById("zout").onclick  = ()=>svg.transition().duration(300).call(zoom.scaleBy,1/1.6);
+document.getElementById("zreset").onclick= ()=>{svg.transition().duration(450).call(zoom.transform,d3.zoomIdentity);closePopover();};
+
+/* ---- dot sizing ---- */
+const maxV = d3.max(CITIES,c=>c.venues.length);
+const rScale = d3.scaleSqrt().domain([1,maxV]).range([3.2,13]);
+
+function positionDots(){
+  gDots.selectAll("g.city").attr("transform",d=>{
+    const p=projection([d.coords[1],d.coords[0]]);
+    return p?`translate(${p[0]},${p[1]})`:"translate(-9999,-9999)";
+  });
+}
+
+/* ---- popover anchored to a dot ---- */
+const app=document.getElementById("app");
+const popover=document.getElementById("popover");
+const pCity=document.getElementById("p-city");
+const pTag=document.getElementById("p-tag");
+const pCount=document.getElementById("p-count");
+const pVenues=document.getElementById("p-venues");
+let pinned=null;      // datum, when click-pinned
+let activeNode=null;  // circle node currently shown
+let hideT=null;
+
+function fillPopover(d){
+  pCity.textContent=d.city;
+  pTag.textContent=d.country;
+  pCount.textContent=d.venues.length+(d.venues.length===1?" venue":" venues");
+  pVenues.innerHTML=d.venues.map((v,i)=>
+    `<li><span class="b">${String(i+1).padStart(2,"0")}</span><span>${escapeHtml(v)}</span></li>`).join("");
+  pVenues.scrollTop=0;
+}
+function placePopover(node){
+  if(!node) return;
+  const aR=app.getBoundingClientRect();
+  const r=node.getBoundingClientRect();
+  const cx=r.left+r.width/2-aR.left, cy=r.top+r.height/2-aR.top, rad=r.width/2;
+  const pw=popover.offsetWidth, ph=popover.offsetHeight, gap=12;
+  let left=cx+rad+gap;
+  if(left+pw>aR.width-8) left=cx-rad-gap-pw;            // flip to the left edge of the dot
+  left=Math.max(8,Math.min(left,aR.width-pw-8));
+  let top=Math.max(8,Math.min(cy-22,aR.height-ph-8));
+  popover.style.left=left+"px";
+  popover.style.top=top+"px";
+}
+function markPulse(d,node){
+  gDots.selectAll(".pulse").remove();
+  const g=d3.select(node.parentNode);
+  const k=(svg.property("__zoom")||{k:1}).k, r0=rScale(d.venues.length);
+  const pulse=g.insert("circle",":first-child").attr("class","pulse").attr("r",r0).attr("stroke-width",1.4/k);
+  if(!matchMedia("(prefers-reduced-motion:reduce)").matches){
+    pulse.append("animate").attr("attributeName","r").attr("from",r0).attr("to",r0+16).attr("dur","1.6s").attr("repeatCount","indefinite");
+    pulse.append("animate").attr("attributeName","opacity").attr("from",".9").attr("to","0").attr("dur","1.6s").attr("repeatCount","indefinite");
+  }
+}
+function openPopover(d,node){
+  clearTimeout(hideT);
+  activeNode=node;
+  gDots.selectAll(".dot").classed("active",false).classed("dim",true);
+  d3.select(node).classed("active",true).classed("dim",false);
+  markPulse(d,node);
+  fillPopover(d);
+  popover.classList.add("show");
+  placePopover(node);   // measure after it's visible
+}
+function closePopover(){
+  pinned=null;activeNode=null;
+  popover.classList.remove("show");
+  gDots.selectAll(".dot").classed("active",false).classed("dim",false);
+  gDots.selectAll(".pulse").remove();
+}
+function scheduleClose(){ if(pinned) return; clearTimeout(hideT); hideT=setTimeout(closePopover,180); }
+function cancelClose(){ clearTimeout(hideT); }
+popover.addEventListener("mouseenter",cancelClose);
+popover.addEventListener("mouseleave",scheduleClose);
+
+function escapeHtml(s){return s.replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]));}
+
+/* ---- draw everything once map data loads ---- */
+d3.json("https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json")
+  .then(world=>{
+    const countries=topojson.feature(world,world.objects.countries);
+    gMap.append("path").attr("class","sphere").datum({type:"Sphere"});
+    gMap.append("path").attr("class","graticule").datum(graticule);
+    gMap.selectAll("path.country").data(countries.features).join("path").attr("class","country");
+
+    const k=svg.property("__zoom") ? svg.property("__zoom").k : 1;
+    const cityG=gDots.selectAll("g.city").data(CITIES).join("g").attr("class","city");
+    cityG.append("circle")
+      .attr("class","dot")
+      .attr("r",d=>rScale(d.venues.length))
+      .on("mouseenter",function(ev,d){ if(!pinned) openPopover(d,this); })
+      .on("mouseleave",function(){ scheduleClose(); })
+      .on("click",function(ev,d){ ev.stopPropagation(); if(pinned===d){ closePopover(); } else { pinned=d; openPopover(d,this); } });
+
+    document.getElementById("loading").style.display="none";
+    size();
+  })
+  .catch(err=>{
+    console.error(err);
+    document.getElementById("loading").innerHTML=
+      `<div class="err">Couldn't load the base map (needs an internet connection for the map outline &amp; fonts).<br/>Detail: ${escapeHtml(String(err.message||err))}</div>`;
+  });
+
+svg.on("click",()=>{ closePopover(); });
+window.addEventListener("resize",()=>{ size(); if(activeNode) placePopover(activeNode); });
+</script>
+</body>
+</html>
