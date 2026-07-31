@@ -274,13 +274,14 @@ function redraw(){
 }
 
 /* ---- zoom ---- */
-const zoom = d3.zoom().scaleExtent([1,9])
+const zoom = d3.zoom().scaleExtent([1,40])
   .on("start",()=>svg.classed("grabbing",true))
-  .on("end",()=>svg.classed("grabbing",false))
+  .on("end",()=>{ svg.classed("grabbing",false); if(activeNode) markPulse(d3.select(activeNode).datum(),activeNode); })
   .on("zoom",(ev)=>{
+    const k=ev.transform.k;
     gRoot.attr("transform",ev.transform);
-    gDots.selectAll(".dot").attr("stroke-width",6/ev.transform.k);
-    gDots.selectAll(".pulse").attr("stroke-width",1.4/ev.transform.k);
+    gDots.selectAll(".dot").attr("r",d=>rScale(d.venues.length)/k).attr("stroke-width",6/k);
+    gDots.selectAll(".pulse").attr("stroke-width",1.4/k);
     if(activeNode) placePopover(activeNode);
   });
 svg.call(zoom).on("dblclick.zoom",null);
@@ -335,10 +336,10 @@ function placePopover(node){
 function markPulse(d,node){
   gDots.selectAll(".pulse").remove();
   const g=d3.select(node.parentNode);
-  const k=(svg.property("__zoom")||{k:1}).k, r0=rScale(d.venues.length);
+  const k=(svg.property("__zoom")||{k:1}).k, r0=rScale(d.venues.length)/k;
   const pulse=g.insert("circle",":first-child").attr("class","pulse").attr("r",r0).attr("stroke-width",1.4/k);
   if(!matchMedia("(prefers-reduced-motion:reduce)").matches){
-    pulse.append("animate").attr("attributeName","r").attr("from",r0).attr("to",r0+16).attr("dur","1.6s").attr("repeatCount","indefinite");
+    pulse.append("animate").attr("attributeName","r").attr("from",r0).attr("to",r0+16/k).attr("dur","1.6s").attr("repeatCount","indefinite");
     pulse.append("animate").attr("attributeName","opacity").attr("from",".9").attr("to","0").attr("dur","1.6s").attr("repeatCount","indefinite");
   }
 }
@@ -366,7 +367,7 @@ popover.addEventListener("mouseleave",scheduleClose);
 function escapeHtml(s){return s.replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]));}
 
 /* ---- draw everything once map data loads ---- */
-d3.json("https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json")
+d3.json("https://cdn.jsdelivr.net/npm/world-atlas@2/countries-50m.json")
   .then(world=>{
     const countries=topojson.feature(world,world.objects.countries);
     gMap.append("path").attr("class","sphere").datum({type:"Sphere"});
